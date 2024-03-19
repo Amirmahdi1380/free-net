@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:free_name/bloc/getConfig/config_bloc.dart';
 import 'package:free_name/di/di.dart';
 import 'package:web_scraper/web_scraper.dart';
 
@@ -23,7 +25,10 @@ class MyApp extends StatelessWidget {
         //colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const MyMain(),
+      home: BlocProvider(
+        create: (context) => ConfigBloc(),
+        child: const MyMain(),
+      ),
     );
   }
 }
