@@ -4,6 +4,7 @@ import 'package:free_name/di/di.dart';
 
 abstract class IConfigRepository {
   Future<Either<String, String>> getAllConfigs();
+  Future<Either<String, int>> getDelayConfigs(String link);
 }
 
 class ConfigRepository extends IConfigRepository {
@@ -12,6 +13,16 @@ class ConfigRepository extends IConfigRepository {
   Future<Either<String, String>> getAllConfigs() async {
     try {
       var resposne = await _datasource.getAllConfig();
+      return right(resposne);
+    } catch (e) {
+      return left(e.toString());
+    }
+  }
+
+  @override
+  Future<Either<String, int>> getDelayConfigs(String link) async {
+    try {
+      var resposne = await _datasource.getDelayConfig(link);
       return right(resposne);
     } catch (e) {
       return left(e.toString());

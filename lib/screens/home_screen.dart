@@ -28,6 +28,26 @@ class _MyMainState extends State<MyMain> {
   List<int> vmessDelays = [];
   List<int> vlessDelays = [];
   List<int> trojanDelays = [];
+  int? total;
+  bool showDelays = true;
+
+  // Method to reset the state and clear delay lists
+  void clearDelays() {
+    setState(() {
+      vmessDelays.clear();
+      vlessDelays.clear();
+      trojanDelays.clear();
+      showDelays = false; // Set the flag to false
+    });
+  }
+
+  // Method to set the flag to true, triggering a rebuild of FutureBuilders
+  void showDelaysAgain() {
+    setState(() {
+      showDelays = true;
+    });
+  }
+
   void initState() {
     // TODO: implement initState
     // fetchProducts();
@@ -47,16 +67,28 @@ class _MyMainState extends State<MyMain> {
     return delay;
   }
 
-  void fetchAllDelays() {
-    for (final link in vmessLinks) {
-      fetchAndAddDelay(link, 'VMess');
-    }
-    for (final link in vlessLinks) {
-      fetchAndAddDelay(link, 'VLess');
-    }
-    for (final link in trojanLinks) {
-      fetchAndAddDelay(link, 'Trojan');
-    }
+  Future<void> fetchAllDelays() async {
+    // Clear existing delay lists
+    setState(() {
+      vmessDelays.clear();
+      vlessDelays.clear();
+      trojanDelays.clear();
+    });
+    // Fetch delays for each link type
+    await Future.forEach(vmessLinks, (link) async {
+      final delay = await fetchDelay(link);
+      vmessDelays.add(delay);
+    });
+    await Future.forEach(vlessLinks, (link) async {
+      final delay = await fetchDelay(link);
+      vlessDelays.add(delay);
+    });
+    await Future.forEach(trojanLinks, (link) async {
+      final delay = await fetchDelay(link);
+      trojanDelays.add(delay);
+    });
+    // Update the UI after fetching all delays
+    setState(() {});
   }
 
 // Method to fetch and add delay for a single link
@@ -82,7 +114,10 @@ class _MyMainState extends State<MyMain> {
       appBar: AppBar(
         elevation: 1.2,
         centerTitle: true,
-        title: const Text('Free Net'),
+        title: const Text(
+          'Free Net',
+          style: TextStyle(fontSize: 12),
+        ),
       ),
       body: BlocBuilder<ConfigBloc, GetConfigState>(
         builder: (context, state) {
@@ -124,6 +159,7 @@ class _MyMainState extends State<MyMain> {
                     scrollDirection: Axis.vertical,
                     shrinkWrap: true,
                     itemBuilder: (context, index) {
+                      total = index;
                       if (index < vmessLinks.length) {
                         return FutureBuilder<int>(
                           future: fetchDelay(vmessLinks[index]),
@@ -245,12 +281,10 @@ class _MyMainState extends State<MyMain> {
             child: const Text('Get config')),
         ElevatedButton(
             onPressed: () {
-              setState(() {
-                vmessDelays.clear();
-                vlessDelays.clear();
-                trojanDelays.clear();
-              });
-              fetchAllDelays();
+              clearDelays();
+              Future.delayed(Duration(milliseconds: 500));
+              setState(() {});
+              showDelaysAgain();
             },
             child: const Text('Test Delay')),
         ElevatedButton(onPressed: () {}, child: const Text('connect')),
