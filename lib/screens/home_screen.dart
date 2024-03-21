@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,7 +32,7 @@ class _MyMainState extends State<MyMain> {
   List<int> trojanDelays = [];
   int? total;
   bool showDelays = true;
-
+  int? selectedIndex;
   // Method to reset the state and clear delay lists
 
   void initState() {
@@ -45,14 +46,40 @@ class _MyMainState extends State<MyMain> {
     super.initState();
   }
 
+  void connectToV2RayWithConfig(String link, int index) async {
+    // Prepare the V2Ray configuration using the selected link
+    final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(link);
+
+    // Connect to V2Ray
+    if (await flutterV2ray.requestPermission()) {
+      flutterV2ray.startV2Ray(
+        remark: 'Your Remark Here',
+        config: v2rayURL.getFullConfiguration(),
+        proxyOnly: false,
+        bypassSubnets: [],
+      );
+      setState(() {
+        selectedIndex = index;
+        // Update the selected index
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Permission Denied'),
+        ),
+      );
+    }
+  }
+
   Future<int> fetchDelay(String link) async {
     final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(link);
+
     final delay = await flutterV2ray.getServerDelay(
         config: v2rayURL.getFullConfiguration(indent: 0));
     return delay;
   }
 
-  Widget buildDelayWidget(String link) {
+  Widget buildDelayWidget(String link, int index) {
     return FutureBuilder<int>(
       future: fetchDelay(link),
       builder: (context, snapshot) {
@@ -65,6 +92,17 @@ class _MyMainState extends State<MyMain> {
           return ListTile(
             title: Text('Link'),
             subtitle: Text('Delay: ${snapshot.data}ms'),
+            leading: snapshot.data == -1
+                ? Icon(Icons.cancel)
+                : Icon(
+                    Icons.check,
+                    color: selectedIndex == index
+                        ? Colors.green
+                        : null, // Change color if selected
+                  ),
+            onTap: () {
+              connectToV2RayWithConfig(link, index);
+            },
           );
         } else if (snapshot.hasError) {
           return ListTile(
@@ -78,9 +116,11 @@ class _MyMainState extends State<MyMain> {
     );
   }
 
+  final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: scaffoldKey,
       persistentFooterAlignment: AlignmentDirectional.topCenter,
       appBar: AppBar(
         elevation: 1.2,
@@ -140,15 +180,16 @@ class _MyMainState extends State<MyMain> {
                     itemBuilder: (context, index) {
                       total = index;
                       if (index < vmessLinks.length) {
-                        return buildDelayWidget(vmessLinks[index]);
+                        return buildDelayWidget(vmessLinks[index], index);
                       } else if (index <
                           vmessLinks.length + vlessLinks.length) {
                         final vlessIndex = index - vmessLinks.length;
-                        return buildDelayWidget(vlessLinks[vlessIndex]);
+                        return buildDelayWidget(vlessLinks[vlessIndex], index);
                       } else {
                         final trojanIndex =
                             index - vmessLinks.length - vlessLinks.length;
-                        return buildDelayWidget(trojanLinks[trojanIndex]);
+                        return buildDelayWidget(
+                            trojanLinks[trojanIndex], index);
                       }
                     },
                     separatorBuilder: (context, index) {
@@ -164,6 +205,60 @@ class _MyMainState extends State<MyMain> {
           );
         },
       ),
+      //floatingActionButtonLocation: FloatingActionButtonLocation.centerTop,
+      floatingActionButton: v2rayStatus.value.state == 'CONNECTED'
+          ? FloatingActionButton.extended(
+              label: const Text('Logs'),
+              onPressed: () {
+                scaffoldKey.currentState!.showBottomSheet(
+                  (context) => ValueListenableBuilder(
+                    valueListenable: v2rayStatus,
+                    builder: (context, value, child) {
+                      return Container(
+                        height: 400,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(value.state),
+                            const SizedBox(height: 10),
+                            Text(value.duration),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('Speed:'),
+                                const SizedBox(width: 10),
+                                Text(value.uploadSpeed),
+                                const Text('↑'),
+                                const SizedBox(width: 10),
+                                Text(value.downloadSpeed),
+                                const Text('↓'),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('Traffic:'),
+                                const SizedBox(width: 10),
+                                Text(value.upload),
+                                const Text('↑'),
+                                const SizedBox(width: 10),
+                                Text(value.download),
+                                const Text('↓'),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            //Text('Core Version: $coreVersion'),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            )
+          : null,
       persistentFooterButtons: [
         ElevatedButton(
             onPressed: () {
@@ -192,7 +287,26 @@ class _MyMainState extends State<MyMain> {
         //     return Container();
         //   },
         // ),
-        ElevatedButton(onPressed: () {}, child: const Text('connect')),
+        ValueListenableBuilder(
+            valueListenable: v2rayStatus,
+            builder: (context, value, child) {
+              if (value.state == 'CONNECTED') {
+                return ElevatedButton(
+                    style: const ButtonStyle(
+                        backgroundColor:
+                            MaterialStatePropertyAll(Colors.green)),
+                    onPressed: () {
+                      flutterV2ray.stopV2Ray();
+                    },
+                    child: const Text('CONNECTED'));
+              } else {
+                return ElevatedButton(
+                    onPressed: () {
+                      flutterV2ray.stopV2Ray();
+                    },
+                    child: const Text('DISCONNECT'));
+              }
+            }),
       ],
     );
   }
