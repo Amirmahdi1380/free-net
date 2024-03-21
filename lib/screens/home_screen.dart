@@ -17,10 +17,11 @@ class MyMain extends StatefulWidget {
 class _MyMainState extends State<MyMain> {
   late final FlutterV2ray flutterV2ray = FlutterV2ray(
     onStatusChanged: (status) {
-      // v2rayStatus.value = status;
+      v2rayStatus.value = status;
     },
   );
   ScrollController _scrollController = ScrollController();
+  var v2rayStatus = ValueNotifier<V2RayStatus>(V2RayStatus());
   final webScraper = WebScraper('https://raw.githubusercontent.com');
   List<String> vmessLinks = [];
   List<String> vlessLinks = [];
@@ -32,21 +33,6 @@ class _MyMainState extends State<MyMain> {
   bool showDelays = true;
 
   // Method to reset the state and clear delay lists
-  void clearDelays() {
-    setState(() {
-      vmessDelays.clear();
-      vlessDelays.clear();
-      trojanDelays.clear();
-      showDelays = false; // Set the flag to false
-    });
-  }
-
-  // Method to set the flag to true, triggering a rebuild of FutureBuilders
-  void showDelaysAgain() {
-    setState(() {
-      showDelays = true;
-    });
-  }
 
   void initState() {
     // TODO: implement initState
@@ -61,50 +47,35 @@ class _MyMainState extends State<MyMain> {
 
   Future<int> fetchDelay(String link) async {
     final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(link);
-
     final delay = await flutterV2ray.getServerDelay(
-        config: v2rayURL.getFullConfiguration());
+        config: v2rayURL.getFullConfiguration(indent: 0));
     return delay;
   }
 
-  Future<void> fetchAllDelays() async {
-    // Clear existing delay lists
-    setState(() {
-      vmessDelays.clear();
-      vlessDelays.clear();
-      trojanDelays.clear();
-    });
-    // Fetch delays for each link type
-    await Future.forEach(vmessLinks, (link) async {
-      final delay = await fetchDelay(link);
-      vmessDelays.add(delay);
-    });
-    await Future.forEach(vlessLinks, (link) async {
-      final delay = await fetchDelay(link);
-      vlessDelays.add(delay);
-    });
-    await Future.forEach(trojanLinks, (link) async {
-      final delay = await fetchDelay(link);
-      trojanDelays.add(delay);
-    });
-    // Update the UI after fetching all delays
-    setState(() {});
-  }
-
-// Method to fetch and add delay for a single link
-  void fetchAndAddDelay(String link, String linkType) async {
-    final delay = await fetchDelay(link);
-
-    // Update the UI based on the link type
-    if (linkType == 'VMess') {
-      vmessDelays.add(delay);
-    } else if (linkType == 'VLess') {
-      vlessDelays.add(delay);
-    } else if (linkType == 'Trojan') {
-      trojanDelays.add(delay);
-    }
-    // Update the UI after adding delay
-    setState(() {});
+  Widget buildDelayWidget(String link) {
+    return FutureBuilder<int>(
+      future: fetchDelay(link),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return ListTile(
+            title: Text('Link'),
+            subtitle: Text('Fetching delay...'),
+          );
+        } else if (snapshot.hasData) {
+          return ListTile(
+            title: Text('Link'),
+            subtitle: Text('Delay: ${snapshot.data}ms'),
+          );
+        } else if (snapshot.hasError) {
+          return ListTile(
+            title: Text('Link'),
+            subtitle: Text('Error fetching delay.'),
+          );
+        } else {
+          return SizedBox();
+        }
+      },
+    );
   }
 
   @override
@@ -137,6 +108,11 @@ class _MyMainState extends State<MyMain> {
               if (state is GetConfigResponseState) ...[
                 state.getConfig.fold((l) => Text(l), (content) {
                   final lines = content.split('\n');
+
+                  vmessLinks.clear();
+                  vlessLinks.clear();
+                  trojanLinks.clear();
+
                   for (final line in lines) {
                     if (line.startsWith('vmess://')) {
                       vmessLinks.add(line);
@@ -154,6 +130,9 @@ class _MyMainState extends State<MyMain> {
                   vmessLinks = vmessLinks.take(10).toList();
                   vlessLinks = vlessLinks.take(10).toList();
                   trojanLinks = trojanLinks.take(10).toList();
+
+                  /// here i want to start over fetchDelay and delete last awaits
+
                   return ListView.separated(
                     controller: _scrollController,
                     scrollDirection: Axis.vertical,
@@ -161,103 +140,15 @@ class _MyMainState extends State<MyMain> {
                     itemBuilder: (context, index) {
                       total = index;
                       if (index < vmessLinks.length) {
-                        return FutureBuilder<int>(
-                          future: fetchDelay(vmessLinks[index]),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return ListTile(
-                                title: Text('VMess link ${index + 1}'),
-                                // subtitle: Text(vmessLinks[index]),
-                              );
-                            } else if (snapshot.hasData) {
-                              return ListTile(
-                                title: Text('VMess link ${index + 1}'),
-                                trailing: Text(
-                                  'Delay: ${snapshot.data}ms',
-                                  style: const TextStyle(color: Colors.red),
-                                ),
-                              );
-                            } else if (snapshot.hasError) {
-                              return ListTile(
-                                title: Text('VMess link ${index + 1}'),
-                                //subtitle: Text(vmessLinks[index]),
-                              );
-                            } else {
-                              return SizedBox();
-                            }
-                          },
-                        );
+                        return buildDelayWidget(vmessLinks[index]);
                       } else if (index <
                           vmessLinks.length + vlessLinks.length) {
                         final vlessIndex = index - vmessLinks.length;
-                        return FutureBuilder<int>(
-                          future: fetchDelay(vlessLinks[vlessIndex]),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return ListTile(
-                                title: Text('VLess link ${vlessIndex + 1}'),
-                                // subtitle: Text(vlessLinks[vlessIndex]),
-                              );
-                            } else if (snapshot.hasData) {
-                              return ListTile(
-                                title: Text('VLess link ${vlessIndex + 1}'),
-                                trailing: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    //Text(vlessLinks[vlessIndex]),
-                                    Text('Delay: ${snapshot.data}ms',
-                                        style:
-                                            const TextStyle(color: Colors.red)),
-                                  ],
-                                ),
-                              );
-                            } else if (snapshot.hasError) {
-                              return ListTile(
-                                title: Text('VLess link ${vlessIndex + 1}'),
-                                // subtitle: Text(vlessLinks[vlessIndex]),
-                              );
-                            } else {
-                              return SizedBox();
-                            }
-                          },
-                        );
+                        return buildDelayWidget(vlessLinks[vlessIndex]);
                       } else {
                         final trojanIndex =
                             index - vmessLinks.length - vlessLinks.length;
-                        return FutureBuilder<int>(
-                          future: fetchDelay(trojanLinks[trojanIndex]),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return ListTile(
-                                title: Text('Trojan link ${trojanIndex + 1}'),
-                                //subtitle: Text(trojanLinks[trojanIndex]),
-                              );
-                            } else if (snapshot.hasData) {
-                              return ListTile(
-                                title: Text('Trojan link ${trojanIndex + 1}'),
-                                trailing: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Text(trojanLinks[trojanIndex]),
-                                    Text('Delay: ${snapshot.data}ms',
-                                        style:
-                                            const TextStyle(color: Colors.red)),
-                                  ],
-                                ),
-                              );
-                            } else if (snapshot.hasError) {
-                              return ListTile(
-                                title: Text('Trojan link ${trojanIndex + 1}'),
-                                //  subtitle: Text(trojanLinks[trojanIndex]),
-                              );
-                            } else {
-                              return SizedBox();
-                            }
-                          },
-                        );
+                        return buildDelayWidget(trojanLinks[trojanIndex]);
                       }
                     },
                     separatorBuilder: (context, index) {
@@ -279,14 +170,28 @@ class _MyMainState extends State<MyMain> {
               BlocProvider.of<ConfigBloc>(context).add(GetConfigStartEvent());
             },
             child: const Text('Get config')),
-        ElevatedButton(
-            onPressed: () {
-              clearDelays();
-              Future.delayed(Duration(milliseconds: 500));
-              setState(() {});
-              showDelaysAgain();
-            },
-            child: const Text('Test Delay')),
+        // BlocBuilder<ConfigBloc, GetConfigState>(
+        //   builder: (context, state) {
+        //     if (state is GetConfigResponseState) {
+        //       return state.getConfig.fold(
+        //           (l) => Container(),
+        //           (r) => ElevatedButton(
+        //               onPressed: () async {
+        //                 // setState(() {
+        //                 //   vlessDelays.clear();
+        //                 //   vmessDelays.clear();
+        //                 //   trojanDelays.clear();
+        //                 // });
+        //                 // BlocProvider.of<ConfigBloc>(context)
+        //                 //     .add(GetConfigRebuildEvent(r));
+        //                 // resetDelayTesting(); // Reset the delay testing index
+        //                 // await fetchAllDelays();
+        //               },
+        //               child: const Text('Test Delay')));
+        //     }
+        //     return Container();
+        //   },
+        // ),
         ElevatedButton(onPressed: () {}, child: const Text('connect')),
       ],
     );

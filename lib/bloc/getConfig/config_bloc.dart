@@ -15,14 +15,13 @@ class ConfigBloc extends Bloc<GetConfigEvent, GetConfigState> {
 
           emit((GetConfigResponseState(getConfig)));
           //emit(ProjectLoadingState());
-        }
-        if (event is GetDelayStartEvent) {
-          emit(GetConfigDelayLoadingState());
-          var getDelayConfig =
-              await _iConfigRepository.getDelayConfigs(event.link);
+        } else if (event is GetConfigRebuildEvent) {
+          emit(GetConfigLoadingState());
+          // Show loading state immediately
 
-          emit((GetDelayResponseState(getDelayConfig)));
-          //emit(ProjectLoadingState());
+          var getConfig =
+              await _iConfigRepository.rebuildConfigs(event.content);
+          emit((GetConfigResponseState(getConfig)));
         }
       },
     );
