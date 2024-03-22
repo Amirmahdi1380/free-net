@@ -19,6 +19,9 @@ class _MyMainState extends State<MyMain> {
   late final FlutterV2ray flutterV2ray = FlutterV2ray(
     onStatusChanged: (status) {
       v2rayStatus.value = status;
+      if (v2rayStatus.value.state == 'CONNECTED') {
+        showButtonSheet = true;
+      }
     },
   );
   ScrollController _scrollController = ScrollController();
@@ -32,6 +35,7 @@ class _MyMainState extends State<MyMain> {
   List<int> trojanDelays = [];
   int? total;
   bool showDelays = true;
+  bool showButtonSheet = false;
   int? selectedIndex;
   // Method to reset the state and clear delay lists
 
@@ -80,17 +84,18 @@ class _MyMainState extends State<MyMain> {
   }
 
   Widget buildDelayWidget(String link, int index) {
+    final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(link);
     return FutureBuilder<int>(
       future: fetchDelay(link),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return ListTile(
-            title: Text('Link'),
+            title: Text(v2rayURL.remark),
             subtitle: Text('Fetching delay...'),
           );
         } else if (snapshot.hasData) {
           return ListTile(
-            title: Text('Link'),
+            title: Text(v2rayURL.remark),
             subtitle: Text('Delay: ${snapshot.data}ms'),
             leading: snapshot.data == -1
                 ? Icon(Icons.cancel)
@@ -106,7 +111,7 @@ class _MyMainState extends State<MyMain> {
           );
         } else if (snapshot.hasError) {
           return ListTile(
-            title: Text('Link'),
+            title: Text(v2rayURL.remark),
             subtitle: Text('Error fetching delay.'),
           );
         } else {
@@ -169,9 +174,14 @@ class _MyMainState extends State<MyMain> {
                   // Take the first ten elements from each list
                   vmessLinks = vmessLinks.take(10).toList();
                   vlessLinks = vlessLinks.take(10).toList();
-                  trojanLinks = trojanLinks.take(10).toList();
+                  trojanLinks = trojanLinks.take(20).toList();
 
                   /// here i want to start over fetchDelay and delete last awaits
+
+                  List<String> combinedLinks = [];
+                  combinedLinks.addAll(trojanLinks);
+                  combinedLinks.addAll(vlessLinks);
+                  combinedLinks.addAll(vmessLinks);
 
                   return ListView.separated(
                     controller: _scrollController,
@@ -179,18 +189,19 @@ class _MyMainState extends State<MyMain> {
                     shrinkWrap: true,
                     itemBuilder: (context, index) {
                       total = index;
-                      if (index < vmessLinks.length) {
-                        return buildDelayWidget(vmessLinks[index], index);
-                      } else if (index <
-                          vmessLinks.length + vlessLinks.length) {
-                        final vlessIndex = index - vmessLinks.length;
-                        return buildDelayWidget(vlessLinks[vlessIndex], index);
-                      } else {
-                        final trojanIndex =
-                            index - vmessLinks.length - vlessLinks.length;
-                        return buildDelayWidget(
-                            trojanLinks[trojanIndex], index);
+                      if (index < combinedLinks.length) {
+                        return buildDelayWidget(combinedLinks[index], index);
                       }
+                      // } else if (index <
+                      //     vmessLinks.length + vlessLinks.length) {
+                      //   final vlessIndex = index - vmessLinks.length;
+                      //   return buildDelayWidget(vlessLinks[vlessIndex], index);
+                      // } else {
+                      //   final trojanIndex =
+                      //       index - vmessLinks.length - vlessLinks.length;
+                      //   return buildDelayWidget(
+                      //       trojanLinks[trojanIndex], index);
+                      // }
                     },
                     separatorBuilder: (context, index) {
                       return const Divider();
@@ -206,7 +217,7 @@ class _MyMainState extends State<MyMain> {
         },
       ),
       //floatingActionButtonLocation: FloatingActionButtonLocation.centerTop,
-      floatingActionButton: v2rayStatus.value.state == 'CONNECTED'
+      floatingActionButton: showButtonSheet
           ? FloatingActionButton.extended(
               label: const Text('Logs'),
               onPressed: () {
@@ -265,28 +276,6 @@ class _MyMainState extends State<MyMain> {
               BlocProvider.of<ConfigBloc>(context).add(GetConfigStartEvent());
             },
             child: const Text('Get config')),
-        // BlocBuilder<ConfigBloc, GetConfigState>(
-        //   builder: (context, state) {
-        //     if (state is GetConfigResponseState) {
-        //       return state.getConfig.fold(
-        //           (l) => Container(),
-        //           (r) => ElevatedButton(
-        //               onPressed: () async {
-        //                 // setState(() {
-        //                 //   vlessDelays.clear();
-        //                 //   vmessDelays.clear();
-        //                 //   trojanDelays.clear();
-        //                 // });
-        //                 // BlocProvider.of<ConfigBloc>(context)
-        //                 //     .add(GetConfigRebuildEvent(r));
-        //                 // resetDelayTesting(); // Reset the delay testing index
-        //                 // await fetchAllDelays();
-        //               },
-        //               child: const Text('Test Delay')));
-        //     }
-        //     return Container();
-        //   },
-        // ),
         ValueListenableBuilder(
             valueListenable: v2rayStatus,
             builder: (context, value, child) {
