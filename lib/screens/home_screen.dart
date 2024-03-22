@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:free_name/bloc/getConfig/config_bloc.dart';
@@ -90,6 +91,23 @@ class _MyMainState extends State<MyMain> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return ListTile(
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: v2rayURL.url));
+
+                      // Show a SnackBar to indicate that the text has been copied
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Copied to clipboard'),
+                        ),
+                      );
+                    },
+                    icon: Icon(Icons.copy))
+              ],
+            ),
             title: Text(v2rayURL.remark),
             subtitle: Text('Fetching delay...'),
           );
