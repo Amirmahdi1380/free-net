@@ -1,13 +1,16 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:free_name/bloc/getConfig/config_bloc.dart';
 import 'package:free_name/bloc/getConfig/config_event.dart';
+//import 'package:share_plus/share_plus.dart';
 import 'package:web_scraper/web_scraper.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import '../bloc/getConfig/config_state.dart';
+import 'package:http/http.dart' as http;
 
 class MyMain extends StatefulWidget {
   const MyMain({super.key});
@@ -25,8 +28,10 @@ class _MyMainState extends State<MyMain> {
       }
     },
   );
+
   ScrollController _scrollController = ScrollController();
   var v2rayStatus = ValueNotifier<V2RayStatus>(V2RayStatus());
+
   final webScraper = WebScraper('https://raw.githubusercontent.com');
   List<String> vmessLinks = [];
   List<String> vlessLinks = [];
@@ -48,6 +53,7 @@ class _MyMainState extends State<MyMain> {
       //coreVersion = await flutterV2ray.getCoreVersion();
       setState(() {});
     });
+
     super.initState();
   }
 
@@ -58,7 +64,7 @@ class _MyMainState extends State<MyMain> {
     // Connect to V2Ray
     if (await flutterV2ray.requestPermission()) {
       flutterV2ray.startV2Ray(
-        remark: 'Your Remark Here',
+        remark: v2rayURL.remark,
         config: v2rayURL.getFullConfiguration(),
         proxyOnly: false,
         bypassSubnets: [],
@@ -76,11 +82,25 @@ class _MyMainState extends State<MyMain> {
     }
   }
 
+  Future<int> getServerDelay(String serverUrl) async {
+    try {
+      var startTime = DateTime.now();
+      var response = await http.get(Uri.parse(serverUrl));
+      // var response = ;
+      var endTime = DateTime.now();
+      var delay = endTime.difference(startTime).inMilliseconds;
+      return delay;
+    } catch (e) {
+      print('Error getting server delay: $e');
+      return -1; // Return a negative value to indicate an error
+    }
+  }
+
   Future<int> fetchDelay(String link) async {
     final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(link);
 
-    final delay = await flutterV2ray.getServerDelay(
-        config: v2rayURL.getFullConfiguration(indent: 0));
+    final delay = flutterV2ray.getServerDelay(
+        config: v2rayURL.getFullConfiguration(indent: 2));
     return delay;
   }
 
@@ -91,32 +111,42 @@ class _MyMainState extends State<MyMain> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return ListTile(
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: v2rayURL.url));
+            trailing: IconButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: v2rayURL.url));
 
-                      // Show a SnackBar to indicate that the text has been copied
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Copied to clipboard'),
-                        ),
-                      );
-                    },
-                    icon: Icon(Icons.copy))
-              ],
-            ),
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      showCloseIcon: true,
+                      content: Text('Copied to clipboard'),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.copy)),
             title: Text(v2rayURL.remark),
-            subtitle: Text('Fetching delay...'),
+            subtitle: const Text('Fetching delay...'),
           );
         } else if (snapshot.hasData) {
           return ListTile(
+            trailing: IconButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: v2rayURL.url));
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      showCloseIcon: true,
+                      content: Text('Copied to clipboard'),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.copy)),
             title: Text(v2rayURL.remark),
             subtitle: Text('Delay: ${snapshot.data}ms'),
             leading: snapshot.data == -1
-                ? Icon(Icons.cancel)
+                ? Icon(
+                    Icons.cancel,
+                    color: selectedIndex == index ? Colors.green : null,
+                  )
                 : Icon(
                     Icons.check,
                     color: selectedIndex == index
@@ -130,10 +160,10 @@ class _MyMainState extends State<MyMain> {
         } else if (snapshot.hasError) {
           return ListTile(
             title: Text(v2rayURL.remark),
-            subtitle: Text('Error fetching delay.'),
+            subtitle: const Text('Error fetching delay.'),
           );
         } else {
-          return SizedBox();
+          return const SizedBox();
         }
       },
     );
@@ -150,7 +180,6 @@ class _MyMainState extends State<MyMain> {
         centerTitle: true,
         title: const Text(
           'Free Net',
-          style: TextStyle(fontSize: 12),
         ),
       ),
       body: BlocBuilder<ConfigBloc, GetConfigState>(
@@ -190,8 +219,8 @@ class _MyMainState extends State<MyMain> {
                   trojanLinks.shuffle();
 
                   // Take the first ten elements from each list
-                  vmessLinks = vmessLinks.take(10).toList();
-                  vlessLinks = vlessLinks.take(10).toList();
+                  vmessLinks = vmessLinks.take(20).toList();
+                  vlessLinks = vlessLinks.take(20).toList();
                   trojanLinks = trojanLinks.take(20).toList();
 
                   /// here i want to start over fetchDelay and delete last awaits
@@ -200,6 +229,8 @@ class _MyMainState extends State<MyMain> {
                   combinedLinks.addAll(trojanLinks);
                   combinedLinks.addAll(vlessLinks);
                   combinedLinks.addAll(vmessLinks);
+
+                  combinedLinks.shuffle();
 
                   return ListView.separated(
                     controller: _scrollController,
@@ -235,59 +266,57 @@ class _MyMainState extends State<MyMain> {
         },
       ),
       //floatingActionButtonLocation: FloatingActionButtonLocation.centerTop,
-      floatingActionButton: showButtonSheet
-          ? FloatingActionButton.extended(
-              label: const Text('Logs'),
-              onPressed: () {
-                scaffoldKey.currentState!.showBottomSheet(
-                  (context) => ValueListenableBuilder(
-                    valueListenable: v2rayStatus,
-                    builder: (context, value, child) {
-                      return Container(
-                        height: 400,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(value.state),
-                            const SizedBox(height: 10),
-                            Text(value.duration),
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text('Speed:'),
-                                const SizedBox(width: 10),
-                                Text(value.uploadSpeed),
-                                const Text('↑'),
-                                const SizedBox(width: 10),
-                                Text(value.downloadSpeed),
-                                const Text('↓'),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text('Traffic:'),
-                                const SizedBox(width: 10),
-                                Text(value.upload),
-                                const Text('↑'),
-                                const SizedBox(width: 10),
-                                Text(value.download),
-                                const Text('↓'),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            //Text('Core Version: $coreVersion'),
-                          ],
-                        ),
-                      );
-                    },
+      floatingActionButton: FloatingActionButton.extended(
+        label: const Text('status'),
+        onPressed: () {
+          scaffoldKey.currentState!.showBottomSheet(
+            (context) => ValueListenableBuilder(
+              valueListenable: v2rayStatus,
+              builder: (context, value, child) {
+                return Container(
+                  height: 400,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(value.state),
+                      const SizedBox(height: 10),
+                      Text(value.duration),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Speed:'),
+                          const SizedBox(width: 10),
+                          Text(value.uploadSpeed),
+                          const Text('↑'),
+                          const SizedBox(width: 10),
+                          Text(value.downloadSpeed),
+                          const Text('↓'),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Traffic:'),
+                          const SizedBox(width: 10),
+                          Text(value.upload),
+                          const Text('↑'),
+                          const SizedBox(width: 10),
+                          Text(value.download),
+                          const Text('↓'),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      //Text('Core Version: $coreVersion'),
+                    ],
                   ),
                 );
               },
-            )
-          : null,
+            ),
+          );
+        },
+      ),
       persistentFooterButtons: [
         ElevatedButton(
             onPressed: () {
@@ -298,6 +327,8 @@ class _MyMainState extends State<MyMain> {
             valueListenable: v2rayStatus,
             builder: (context, value, child) {
               if (value.state == 'CONNECTED') {
+                showButtonSheet = true;
+
                 return ElevatedButton(
                     style: const ButtonStyle(
                         backgroundColor:
